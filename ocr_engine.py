@@ -6,7 +6,7 @@ import pytesseract
 from PIL import Image
 
 # Import custom structures safely matching document_schemas.py hierarchy
-from document_schemas import ProcessedPage, OCRParagraph, OCRWord, BoundingBox
+from document_Schemas import ProcessedPage, OCRParagraph, OCRWord, BoundingBox
 
 class LegalIngestionPipeline:
     def __init__(self, tesseract_cmd: Optional[str] = None, dpi: int = 200):
