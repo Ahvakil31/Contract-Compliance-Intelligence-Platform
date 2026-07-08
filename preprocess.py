@@ -3,7 +3,7 @@ import torch
 from typing import List, Dict
 from transformers import AutoTokenizer
 import spacy
-from document_schemas import CUADDocument, CUADAnnotation
+from document_Schemas import CUADDocument, CUADAnnotation
 
 class LegalDataPreprocessor:
     def __init__(self, model_name: str = "roberta-base"):
