@@ -2,10 +2,16 @@
 import torch
 from torch.utils.data import Dataset
 from transformers import AutoTokenizer
-from typing import List, Dict
+from typing import List, Dict, Union
 
 class LegalClauseDataset(Dataset):
-    def __init__(self, texts: List[str], labels: List[List[int]], model_name: str = "nlpaueb/legal-bert-base-uncased", max_length: int = 512):
+    def __init__(
+        self, 
+        texts: List[str], 
+        labels: List[List[Union[int, float]]], 
+        model_name: str = "nlpaueb/legal-bert-base-uncased", 
+        max_length: int = 512
+    ):
         self.texts = texts
         self.labels = labels
         self.tokenizer = AutoTokenizer.from_pretrained(model_name)
@@ -16,7 +22,6 @@ class LegalClauseDataset(Dataset):
 
     def __getitem__(self, idx: int) -> Dict[str, torch.Tensor]:
         text = str(self.texts[idx])
-        raw_labels = self.labels[idx]
         
         encoding = self.tokenizer(
             text,
@@ -26,18 +31,10 @@ class LegalClauseDataset(Dataset):
             truncation=True,
             return_tensors="pt"
         )
-        
-        # FIXED: Handles padding and truncation variations coming from token processors
-        if len(raw_labels) != self.max_length:
-            if len(raw_labels) > self.max_length:
-                processed_labels = raw_labels[:self.max_length]
-            else:
-                processed_labels = raw_labels + [-100] * (self.max_length - len(raw_labels))
-        else:
-            processed_labels = raw_labels
 
         return {
-            "input_ids": encoding["input_ids"].flatten(),
-            "attention_mask": encoding["attention_mask"].flatten(),
-            "labels": torch.tensor(processed_labels, dtype=torch.long)
+            "input_ids": encoding["input_ids"].squeeze(0),
+            "attention_mask": encoding["attention_mask"].squeeze(0),
+            # Target needs to match class count (e.g., shape [3]) and be torch.float for BCE loss
+            "labels": torch.tensor(self.labels[idx], dtype=torch.float)
         }

@@ -13,7 +13,7 @@ class InferenceOutput(BaseModel):
 class LegalPostProcessor:
     def __init__(self, thresholds: Dict[str, ClauseThreshold]):
         self.thresholds = thresholds
-        # Compile hard matching patterns for key risks to prevent false negatives across all 3 pipeline targets
+        # Expanded heuristic patterns covering high-risk contract categories
         self.heuristic_patterns = {
             "Auto-Renewal": re.compile(
                 r"(auto(matically)?\s*renew|extension\s*notice|successive\s*terms|automatic\s*extension)", 
@@ -25,6 +25,19 @@ class LegalPostProcessor:
             ),
             "Confidentiality": re.compile(
                 r"(confidential|non-disclosure|nda|proprietary\s*information|disclose\s*confidential|trade\s*secret)", 
+                re.IGNORECASE
+            ),
+            # NEW: Expanded categories for Option 3
+            "Limitation of Liability": re.compile(
+                r"(limitation\s*of\s*liability|aggregate\s*liability|consequential\s*damages|cap\s*on\s*liability|in\s*no\s*event\s*shall)", 
+                re.IGNORECASE
+            ),
+            "Governing Law": re.compile(
+                r"(governed\s*by|laws\s*of|jurisdiction|exclusive\s*venue|choice\s*of\s*law)", 
+                re.IGNORECASE
+            ),
+            "Termination for Convenience": re.compile(
+                r"(terminate\s*for\s*convenience|terminate\s*without\s*cause|prior\s*written\s*notice\s*of\s*termination)", 
                 re.IGNORECASE
             )
         }
@@ -56,7 +69,7 @@ class LegalPostProcessor:
             if current_score >= threshold_cutoff:
                 final_predictions.append(clause)
                 
-            # If the score sits right in a zone of uncertainty, flag for human verification
+            # If the score sits in an uncertainty buffer (+/- 0.15 of threshold), flag for human verification
             if abs(current_score - threshold_cutoff) < 0.15:
                 requires_review = True
                 
@@ -67,29 +80,24 @@ class LegalPostProcessor:
             requires_human_review=requires_review
         )
 
-# Full System Verification Hook
 if __name__ == "__main__":
-    # Configure pre-calibrated baseline settings representing all three target classes
+    # Baseline configuration supporting expanded categories
     mock_rules = {
         "Auto-Renewal": ClauseThreshold(clause_name="Auto-Renewal", optimal_threshold=0.35, target_precision=0.88, target_recall=0.95),
         "Indemnification": ClauseThreshold(clause_name="Indemnification", optimal_threshold=0.50, target_precision=0.91, target_recall=0.92),
-        "Confidentiality": ClauseThreshold(clause_name="Confidentiality", optimal_threshold=0.45, target_precision=0.93, target_recall=0.94)
+        "Confidentiality": ClauseThreshold(clause_name="Confidentiality", optimal_threshold=0.45, target_precision=0.93, target_recall=0.94),
+        "Limitation of Liability": ClauseThreshold(clause_name="Limitation of Liability", optimal_threshold=0.40, target_precision=0.90, target_recall=0.95),
+        "Governing Law": ClauseThreshold(clause_name="Governing Law", optimal_threshold=0.50, target_precision=0.92, target_recall=0.91),
+        "Termination for Convenience": ClauseThreshold(clause_name="Termination for Convenience", optimal_threshold=0.38, target_precision=0.89, target_recall=0.94)
     }
     
     processor = LegalPostProcessor(thresholds=mock_rules)
     
-    # Sample with ambiguous model probabilities but clear textual "Confidentiality" and "Auto-Renewal" phrase triggers
-    sample_text = "The receiving party must protect all trade secrets and proprietary information."
-    ambiguous_model_probs = {
-        "Auto-Renewal": 0.10, 
-        "Indemnification": 0.05,
-        "Confidentiality": 0.32  # Below the 0.45 threshold
-    }
+    sample_text = "Either party may terminate this Agreement without cause upon 30 days prior written notice."
+    ambiguous_probs = {"Termination for Convenience": 0.20}
     
-    print("\n🧐 Running Ambiguous Extraction Text Through Post-Processor...")
-    result = processor.process_predictions(sample_text, ambiguous_model_probs)
-    
-    print(f"   ↳ Processing Text: '{result.text}'")
-    print(f"   ↳ Extracted Clauses: {result.predicted_clauses}")
-    print(f"   ↳ Adjusted Probabilities: {result.confidence_scores}")
-    print(f"   ↳ Flagged for Human Review Queue: {result.requires_human_review}")
+    result = processor.process_predictions(sample_text, ambiguous_probs)
+    print(f"Text: '{result.text}'")
+    print(f"Predicted Clauses: {result.predicted_clauses}")
+    print(f"Adjusted Scores: {result.confidence_scores}")
+    print(f"Requires Human Review: {result.requires_human_review}")

@@ -1,0 +1,62 @@
+services:
+  redis-broker:
+    image: redis:7-alpine
+    container_name: legal_redis_broker
+    ports:
+      - "6379:6379"
+    networks:
+      - legal_nlp_network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  fastapi-api:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+      target: app-core
+    command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+    container_name: legal_fastapi_gateway
+    ports:
+      - "8000:8000"
+    environment:
+      - REDIS_URL=redis://redis-broker:6379/0
+      - PINECONE_API_KEY=${PINECONE_API_KEY:-dummy_key_for_local_testing}
+    volumes:
+      - legal_shared_vault:/tmp/legal_ingestion_vault
+      - .:/app
+    networks:
+      - legal_nlp_network
+    depends_on:
+      redis-broker:
+        condition: service_healthy
+
+  celery-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+      target: app-core
+    command: celery -A tasks.celery_app worker --loglevel=info --concurrency=1
+    container_name: legal_celery_worker
+    environment:
+      - REDIS_URL=redis://redis-broker:6379/0
+      - PINECONE_API_KEY=${PINECONE_API_KEY:-dummy_key_for_local_testing}
+      - PYTHONUNBUFFERED=1
+    volumes:
+      - legal_shared_vault:/tmp/legal_ingestion_vault
+      - .:/app
+    networks:
+      - legal_nlp_network
+    depends_on:
+      redis-broker:
+        condition: service_healthy
+
+networks:
+  legal_nlp_network:
+    driver: bridge
+
+volumes:
+  legal_shared_vault:
+    driver: local
