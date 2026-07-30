@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Contract Compliance Intelligence Platform</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-slate-900 text-slate-100 min-h-screen font-sans">
+
+    <header class="border-b border-slate-800 bg-slate-950 p-5">
+        <h1 class="text-xl font-bold tracking-tight text-emerald-400">⚖️ Contract Compliance Intelligence Platform</h1>
+    </header>
+
+    <main class="max-w-[1600px] mx-auto p-6 grid grid-cols-1 xl:grid-cols-3 gap-6">
+        
+        <!-- Left Panel: Document Upload & PDF Viewer -->
+        <div class="space-y-6">
+            <div class="bg-slate-950 p-5 rounded-xl border border-slate-800 h-fit">
+                <h2 class="text-lg font-semibold mb-4 border-b border-slate-800 pb-2">Ingest New Contract</h2>
+                
+                <form id="uploadForm" class="space-y-4">
+                    <div class="border-2 border-dashed border-slate-700 hover:border-emerald-500 rounded-lg p-6 text-center cursor-pointer transition-colors bg-slate-900/50">
+                        <input type="file" id="contractFile" name="file" class="hidden" accept="application/pdf" required />
+                        <label for="contractFile" class="cursor-pointer block">
+                            <svg class="mx-auto h-12 w-12 text-slate-500 mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                            </svg>
+                            <span id="fileNameDisplay" class="text-sm font-medium text-slate-300">Select contract PDF</span>
+                        </label>
+                    </div>
+                    
+                    <button type="submit" id="submitBtn" class="w-full py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold rounded-lg shadow-md transition-colors text-sm">
+                        Execute Pipeline Analysis
+                    </button>
+                </form>
+
+                <div id="statusTracker" class="mt-6 p-4 rounded-lg bg-slate-900 border border-slate-800 hidden space-y-3">
+                    <div class="flex justify-between items-center text-xs">
+                        <span id="stageLabel" class="font-bold text-slate-400 uppercase tracking-wider">Queueing Asset...</span>
+                        <span id="percentageDisplay" class="text-emerald-400 font-mono font-bold">0%</span>
+                    </div>
+                    <div class="w-full bg-slate-800 h-2 rounded-full overflow-hidden">
+                        <div id="progressBar" class="bg-emerald-500 h-full w-0 transition-all duration-300"></div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="bg-slate-950 p-4 rounded-xl border border-slate-800 flex flex-col h-[500px]">
+                <h2 class="text-sm font-bold mb-3 uppercase tracking-wider text-slate-400 flex items-center gap-2">
+                    <span>📄</span> Live Document Viewer
+                </h2>
+                <div id="pdfViewerContainer" class="flex-1 bg-slate-900 rounded-lg overflow-hidden border border-slate-800 flex items-center justify-center text-xs italic text-slate-500 text-center p-4">
+                    No active document loaded. Select a PDF file above to preview it here.
+                </div>
+            </div>
+        </div>
+
+        <!-- Right Panel: Dashboard Cards -->
+        <div class="xl:col-span-2 space-y-6">
+            <div class="bg-slate-950 p-6 rounded-xl border border-slate-800 min-h-[750px]">
+                <h2 class="text-xl font-bold mb-6 border-b border-slate-800 pb-3 flex items-center gap-2 text-slate-200">
+                    <span>📊</span> Analysis Dashboard Output
+                </h2>
+                <div id="resultsContainer" class="text-sm text-slate-400 italic">
+                    Staging engine ready. Submit a PDF legal contract execution draft on the left panel to begin analysis.
+                </div>
+            </div>
+
+            <div id="debugWrapper" class="bg-slate-950 p-5 rounded-xl border border-dashed border-slate-800 hidden">
+                <h3 class="text-slate-400 font-bold text-xs uppercase tracking-wider mb-2 flex items-center gap-2">
+                    <span>🛠️</span> Live Pipeline Schema Payload
+                </h3>
+                <pre id="debugPayloadOutput" class="text-xs bg-slate-900 p-4 rounded border border-slate-800 overflow-x-auto text-slate-400 font-mono max-h-60"></pre>
+            </div>
+        </div>
+        
+    </main>
+
+    <script>
+        const fileInput = document.getElementById('contractFile');
+        const nameDisplay = document.getElementById('fileNameDisplay');
+        const pdfViewerContainer = document.getElementById('pdfViewerContainer');
+        let currentUploadedFileName = "";
+        
+        fileInput.addEventListener('change', (e) => {
+            if (e.target.files.length > 0) {
+                const selectedFile = e.target.files[0];
+                currentUploadedFileName = selectedFile.name;
+                nameDisplay.textContent = currentUploadedFileName;
+                nameDisplay.classList.remove('text-slate-300');
+                nameDisplay.classList.add('text-emerald-400', 'font-bold');
+
+                const blobURL = URL.createObjectURL(selectedFile);
+                pdfViewerContainer.innerHTML = `
+                    <iframe src="${blobURL}" class="w-full h-full border-0 rounded-lg bg-white" type="application/pdf"></iframe>
+                `;
+            }
+        });
+
+        document.getElementById('uploadForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const fileField = document.getElementById('contractFile').files[0];
+            if (!fileField) return;
+
+            const formData = new FormData();
+            formData.append('file', fileField);
+
+            const submitBtn = document.getElementById('submitBtn');
+            const statusTracker = document.getElementById('statusTracker');
+            const resultsContainer = document.getElementById('resultsContainer');
+            document.getElementById('debugWrapper').classList.add('hidden');
+
+            try {
+                submitBtn.disabled = true;
+                submitBtn.classList.add('opacity-50', 'cursor-not-allowed');
+                resultsContainer.innerHTML = '<div class="text-slate-400 animate-pulse">Uploading file and initializing distributed cluster workers...</div>';
+                
+                statusTracker.classList.remove('hidden');
+                updateProgressBar("STAGING_UPLOADS", 10);
+
+                const response = await fetch('/api/v1/contracts/upload', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                if (!response.ok) throw new Error(`Upload server error: ${response.status}`);
+
+                const data = await response.json();
+                pollStatus(data.task_id);
+
+            } catch (err) {
+                resultsContainer.innerHTML = `<div class="text-red-400 font-medium">⚠️ Error: ${err.message}</div>`;
+                submitBtn.disabled = false;
+                submitBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+            }
+        });
+
+        async function pollStatus(taskId) {
+            const resultsContainer = document.getElementById('resultsContainer');
+            const submitBtn = document.getElementById('submitBtn');
+
+            const pollInterval = setInterval(async () => {
+                try {
+                    const response = await fetch(`/api/v1/contracts/tasks/${taskId}`);
+                    if (!response.ok) return;
+                    
+                    const data = await response.json();
+
+                    if (data.status === 'PROGRESS') {
+                        updateProgressBar(data.stage, data.progress_percentage);
+                    } 
+                    else if (data.status === 'SUCCESS' || data.status === 'COMPLETED') {
+                        clearInterval(pollInterval);
+                        updateProgressBar("PIPELINE_COMPLETE", 100);
+                        
+                        document.getElementById('debugPayloadOutput').textContent = JSON.stringify(data, null, 4);
+                        document.getElementById('debugWrapper').classList.remove('hidden');
+
+                        // Hybrid extraction logic supporting nested or flat metadata payloads
+                        const meta = data.metadata || data.document_metadata || {};
+                        
+                        const core = meta.core_profile || {
+                            client_name: meta.client_name,
+                            counterparty_name: meta.counterparty_name,
+                            effective_date: meta.effective_date,
+                            execution_status: meta.execution_status,
+                            contract_classification: meta.contract_type
+                        };
+
+                        const term = meta.term_infrastructure || {
+                            initial_term_months: meta.initial_term,
+                            expiration_date: meta.expiration_date,
+                            renewal_mechanics: meta.renewal_mechanics,
+                            non_renewal_notice_days: meta.termination_convenience_notice
+                        };
+
+                        const term_prov = (meta.term_infrastructure && meta.term_infrastructure.termination_provisions) || {
+                            for_cause_cure_days: meta.termination_cause_notice,
+                            for_convenience_notice_days: meta.termination_convenience_notice,
+                            change_of_control_trigger: meta.change_of_control
+                        };
+
+                        const fin = meta.financial_obligations || {
+                            payment_terms: meta.payment_terms,
+                            pricing_structure: meta.pricing_structure,
+                            audit_rights: meta.audit_rights,
+                            key_deliverables_summary: meta.key_deliverables
+                        };
+
+                        const risk = meta.liability_allocation || {
+                            lol_cap_type: "Limitation Cap",
+                            lol_cap_details: meta.liability_cap,
+                            indemnification_scope: meta.indemnification_scope,
+                            restrictive_covenants: typeof meta.restrictive_covenants === 'string' 
+                                ? [meta.restrictive_covenants] 
+                                : meta.restrictive_covenants,
+                            ip_treatment: meta.ip_treatment
+                        };
+
+                        const dispute = meta.dispute_mechanics || {
+                            governing_law: meta.governing_law,
+                            jurisdiction_venue: meta.jurisdiction_venue,
+                            adr_requirements: meta.adr_mechanics
+                        };
+
+                        // Helper to safely format term strings without appending duplicate units
+                        const formatUnit = (val, unit) => {
+                            if (!val || val === 'N/A') return 'N/A';
+                            const strVal = String(val).trim();
+                            const lowerVal = strVal.toLowerCase();
+                            const lowerUnit = unit.toLowerCase();
+                            
+                            if (lowerVal.includes(lowerUnit) || lowerVal.includes('specified') || lowerVal.includes('agreed')) {
+                                return strVal;
+                            }
+                            return `${strVal} ${unit}`;
+                        };
+
+                        const initialTermFormatted = formatUnit(term.initial_term_months, 'Months');
+                        const noticeDaysFormatted = formatUnit(term.non_renewal_notice_days, 'Days');
+                        const causeDaysFormatted = formatUnit(term_prov.for_cause_cure_days, 'Days');
+                        const convenienceDaysFormatted = formatUnit(term_prov.for_convenience_notice_days, 'Days');
+
+                        let dashboardHTML = `
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-6 animate-fade-in text-slate-300">
+                                
+                                <div class="bg-slate-900 p-4 rounded-xl border border-slate-800 space-y-2">
+                                    <h3 class="text-emerald-400 font-bold text-sm uppercase tracking-wider flex items-center gap-2 mb-2">
+                                        <span>🏢</span> 1. Core Profile & Metadata
+                                    </h3>
+                                    <p><strong class="text-slate-500 text-xs uppercase block">Client Entity:</strong> <span class="text-slate-200 font-medium">${core.client_name || 'N/A'}</span></p>
+                                    <p><strong class="text-slate-500 text-xs uppercase block">Counterparty:</strong> <span class="text-slate-200 font-medium">${core.counterparty_name || 'N/A'}</span></p>
+                                    <p><strong class="text-slate-500 text-xs uppercase block">Effective Date & Status:</strong> <span class="text-slate-200 font-medium">${core.effective_date || 'N/A'} (${core.execution_status || 'Unknown'})</span></p>
+                                    <p><strong class="text-slate-500 text-xs uppercase block">Classification:</strong> <span class="text-slate-200 font-medium">${core.contract_classification || 'N/A'}</span></p>
+                                </div>
+
+                                <div class="bg-slate-900 p-4 rounded-xl border border-slate-800 space-y-2">
+                                    <h3 class="text-emerald-400 font-bold text-sm uppercase tracking-wider flex items-center gap-2 mb-2">
+                                        <span>🚪</span> 2. Term & Exit Infrastructure
+                                    </h3>
+                                    <p><strong class="text-slate-500 text-xs uppercase block">Initial Term:</strong> <span class="text-slate-200 font-medium">${initialTermFormatted} (Exp: ${term.expiration_date || 'N/A'})</span></p>
+                                    <p><strong class="text-slate-500 text-xs uppercase block">Renewal Mechanics:</strong> <span class="text-slate-200 font-medium">${term.renewal_mechanics || 'N/A'} (Notice: ${noticeDaysFormatted})</span></p>
+                                    <p><strong class="text-slate-500 text-xs uppercase block">Termination Windows:</strong> <span class="text-slate-200 font-medium">Cause: ${causeDaysFormatted} | Convenience: ${convenienceDaysFormatted}</span></p>
+                                    <p><strong class="text-slate-500 text-xs uppercase block">Change of Control:</strong> <span class="text-slate-200 text-xs">${term_prov.change_of_control_trigger || 'N/A'}</span></p>
+                                </div>
+
+                                <div class="bg-slate-900 p-4 rounded-xl border border-slate-800 space-y-2">
+                                    <h3 class="text-emerald-400 font-bold text-sm uppercase tracking-wider flex items-center gap-2 mb-2">
+                                        <span>💰</span> 3. Financial & Operational Obligations
+                                    </h3>
+                                    <p><strong class="text-slate-500 text-xs uppercase block">Payment / Pricing Structure:</strong> <span class="text-slate-200 font-medium">${fin.payment_terms || 'N/A'} | ${fin.pricing_structure || 'N/A'}</span></p>
+                                    <p><strong class="text-slate-500 text-xs uppercase block">Reconciliation & Audit Rights:</strong> <span class="text-slate-200 font-medium">${fin.audit_rights || 'N/A'}</span></p>
+                                    <p><strong class="text-slate-500 text-xs uppercase block">Deliverables / Scope Outline:</strong> <span class="text-slate-200 text-xs line-clamp-3">${fin.key_deliverables_summary || 'N/A'}</span></p>
+                                </div>
+
+                                <div class="bg-slate-900 p-4 rounded-xl border border-slate-800 space-y-2">
+                                    <h3 class="text-emerald-400 font-bold text-sm uppercase tracking-wider flex items-center gap-2 mb-2">
+                                        <span>⚠️</span> 4. Legal Risk & Liability Allocation
+                                    </h3>
+                                    <p><strong class="text-slate-500 text-xs uppercase block">Limitation of Liability Caps:</strong> <span class="text-amber-400 font-semibold font-mono">${risk.lol_cap_type || 'Cap'} (${risk.lol_cap_details || 'N/A'})</span></p>
+                                    <p><strong class="text-slate-500 text-xs uppercase block">Indemnification Scope:</strong> <span class="text-slate-200 text-xs line-clamp-2">${risk.indemnification_scope || 'N/A'}</span></p>
+                                    <p><strong class="text-slate-500 text-xs uppercase block">Exclusivity & Restrictive Covenants:</strong> <span class="text-slate-200 font-medium">${risk.restrictive_covenants && risk.restrictive_covenants.length > 0 ? (Array.isArray(risk.restrictive_covenants) ? risk.restrictive_covenants.join(', ') : risk.restrictive_covenants) : 'None Detected'}</span></p>
+                                    <p><strong class="text-slate-500 text-xs uppercase block">IP Rights Treatment:</strong> <span class="text-slate-200 text-xs line-clamp-2">${risk.ip_treatment || 'N/A'}</span></p>
+                                </div>
+
+                            </div>
+
+                            <div class="bg-slate-900 p-4 rounded-xl border border-slate-800 space-y-2 mt-6 text-slate-300">
+                                <h3 class="text-emerald-400 font-bold text-sm uppercase tracking-wider flex items-center gap-2 mb-2">
+                                    <span>⚖️</span> 5. Dispute & Venue Mechanics
+                                </h3>
+                                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                    <p><strong class="text-slate-500 text-xs uppercase block">Governing Law & Jurisdiction Venue:</strong> <span class="text-slate-200 font-medium font-mono">${dispute.governing_law || 'N/A'} (${dispute.jurisdiction_venue || 'N/A'})</span></p>
+                                    <p><strong class="text-slate-500 text-xs uppercase block">Alternative Dispute Resolution (ADR):</strong> <span class="text-slate-200 font-medium">${dispute.adr_requirements || 'N/A'}</span></p>
+                                </div>
+                            </div>
+
+                            <div class="bg-slate-900/40 p-4 rounded-xl border border-slate-800/60 mt-6 flex justify-between items-center text-xs text-slate-500">
+                                <div>Processed Asset ID: <span class="font-mono text-slate-400">${meta.document_id || currentUploadedFileName}</span></div>
+                                <div>Pipeline Node Status: <span class="text-emerald-500 font-mono font-bold">${data.status}</span></div>
+                            </div>
+                        `;
+
+                        document.getElementById('resultsContainer').innerHTML = dashboardHTML;
+                        submitBtn.disabled = false;
+                        submitBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+                    } 
+                    else if (data.status === 'FAILURE') {
+                        clearInterval(pollInterval);
+                        updateProgressBar("PROCESSING_FAILED", 100);
+                        resultsContainer.innerHTML = `<div class="text-red-400 font-semibold">❌ Task Execution Error: ${data.error || 'Unknown Error'}</div>`;
+                        
+                        submitBtn.disabled = false;
+                        submitBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+                    }
+                } catch (err) {
+                    console.error("Polling error: ", err);
+                }
+            }, 1000);
+        }
+
+        function updateProgressBar(stage, percentage) {
+            document.getElementById('stageLabel').textContent = stage.replace(/_/g, ' ');
+            document.getElementById('percentageDisplay').textContent = `${percentage}%`;
+            
+            const progressBar = document.getElementById('progressBar');
+            progressBar.style.width = `${percentage}%`;
+            
+            if (stage === "PROCESSING_FAILED") {
+                progressBar.classList.remove('bg-emerald-500');
+                progressBar.classList.add('bg-red-500');
+            } else {
+                progressBar.classList.remove('bg-red-500');
+                progressBar.classList.add('bg-emerald-500');
+            }
+        }
+    </script>
+</body>
+</html>
